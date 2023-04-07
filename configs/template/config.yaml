@@ -1,0 +1,100 @@
+exp_name: &exp_name "template"
+
+num_frames: &num_frames 16  # number of video frames
+channels: &channels 4
+image_size: &image_size 256   # height and width of frames
+timesteps: &timesteps 1000   # number of steps
+log_dir: &log_dir "logs"
+
+model:
+  lr: 1.0e-5
+  target: "models.ModelInterface"
+  params:
+    exp_name: *exp_name
+    optimizer: "adamw"
+    diffusion:
+      target: "models.diffusion.LatentDDPM"
+      params:
+        num_frames: *num_frames
+        timesteps: *timesteps
+        channels: *channels
+        linear_start: 0.00085
+        linear_end: 0.0120
+        loss_type: "l2"
+        beta_schedule: "linear"
+        parameterization: "eps"
+        cond_drop_prob: 0.1
+        pretrain: "pretrain/ddpm_v2.ckpt"
+        unet:
+          target: "models.unet.SDUNetModel3D"
+          params:
+            num_frames: *num_frames
+            in_channels: *channels
+            out_channels: *channels
+            model_channels: 320
+            attention_resolutions: [1, 2, 4] # actually is downsample rate
+            num_res_blocks: 2
+            channel_mult: [1, 2, 4, 4]
+            num_head_channels: 64
+            context_dim: 1024
+            use_checkpoint: False
+            pretrain: "pretrain/unet_v2.ckpt"
+
+        autoencoder:
+          target: "models.encoder.AutoencoderKLX"
+          params:
+            embed_dim: 4
+            ddconfig:
+              double_z: true
+              z_channels: 4
+              resolution: *image_size
+              in_channels: 3
+              out_ch: 3
+              ch: 128
+              num_res_blocks: 2
+              attn_resolutions: []
+              dropout: 0.0
+              ch_mult: [1, 2, 4, 4]
+            pretrain: "pretrain/autoencoder_kl_v2.ckpt"
+        text_encoder:
+          target: "models.encoder.FrozenOpenCLIPEmbedder"
+          params:
+            freeze: True
+            layer: "penultimate"
+            cache_dir: "pretrain"
+    sample_steps: 50
+    scale: 7.5
+    image_lambda: 0.5
+
+data:
+  target: "dataset.DataInterface"
+  params:
+    batch_size: 2
+    dataset:
+      target: "xxx"
+      params:
+        # params for dataset
+    eval_dataset:
+      target: "xxx"
+      params:
+        # params for eval dataset
+
+trainer:
+  accelerator: "gpu"
+  max_steps: 1000000
+  log_every_n_steps: 100
+  precision: 16 
+  accumulate_grad_batches: 4
+  gradient_clip_val: 1.0
+  strategy: "ddp"
+  val_check_interval: 100000
+
+callbacks:
+  - target: "callbacks.ModelCheckpoint"
+    params:
+      every_n_train_steps: 500
+      save_top_k: -1
+  - target: "callbacks.LearningRateMonitor"
+    params:
+      logging_interval: "step"
+  - target: "callbacks.CUDACallback"

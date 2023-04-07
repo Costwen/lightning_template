@@ -1,0 +1,14 @@
+.vscode
+
+# py ignore
+*.pyc
+__pycache__
+.vscode
+log
+*.log
+logs
+pca
+pretrain
+tmp
+data
+outputs
